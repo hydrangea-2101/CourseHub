@@ -58,7 +58,7 @@ try:
     limit = int(input("Nhap so luong hoc phan muon hien thi: "))
     print(courses[:limit])
 except ValueError:
-    print("So luong phai la so nguyen")
+    print("So luong phai la so nguyen.")
 # ======================
 # Hàm tìm kiếm học phần
 def search_courses(keyword):
