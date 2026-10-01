@@ -71,23 +71,24 @@ def search_courses(keyword):
             results.append(course)
     return results
 print(search_courses("web"))
-
+# =======================
+# Hàm đăng ký học phần
 def enroll_student(student_id, course_code):
     student = None
-    for student in students:
-        if student["id"] == str(student_id):
-            student = student
+    for s in students:
+        if s["id"] == str(student_id):
+            student = s
             break;
     course = None
-    for course in courses:
-        if course["code"] == str(course_code):
-            course = course
+    for c in courses:
+        if c["code"] == str(course_code):
+            course = c
             break;
     if student is None:
         print("Sinh viên không tồn tại")
         return False
     else:
-        if course is Node:
+        if course is None:
             print("Học phần không tồn tại")
             return False
         else:
@@ -103,5 +104,22 @@ def enroll_student(student_id, course_code):
                     course["enrolled"] += 1
                     print("Đăng ký thành công.")
 
-        
-    
+# ===================
+# Test chương trình enroll_student
+# TH1: Sinh viên không tồn tại
+enroll_student(24001714,"INT2204") # Do id 24001714 không tồn tại
+                                   # Nên sẽ in ra chuỗi "Sinh viên không tồn tại
+# TH2: Học phần không tồn tại
+enroll_student(22000001,"hehehaha") # Do course_code hehehaha không tồn tại
+                                    # Nên sẽ in ra chuỗi "Học phần không tồn tại"
+# TH3: Lớp học phần đã đầy
+enroll_student(22000001,"INT2205")  # Do lớp INT2205 đã có đủ 2 người
+                                    # Nên sẽ in ra "Đăng ký thất bại do đủ số lượng"
+# TH4: Đăng ký trùng học phần
+enroll_student(22000001,"INT2204") # Do id 22000001 đã đăng ký lớp INT2204
+                                   # Nên sẽ in ra "Sinh viên đã đăng ký học phần này rồi"
+# TH5: Đăng ký thành công
+enroll_student(22000002,"INT2204") # In ra đăng ký thành công 
+print(courses) # Thông tin enrolled đã được cập nhật từ 2 lên 3
+print(enrollments) # Sinh viên đã được cập thêm thành công vào enrollments
+
