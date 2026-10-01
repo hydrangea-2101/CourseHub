@@ -71,3 +71,37 @@ def search_courses(keyword):
             results.append(course)
     return results
 print(search_courses("web"))
+
+def enroll_student(student_id, course_code):
+    student = None
+    for student in students:
+        if student["id"] == str(student_id):
+            student = student
+            break;
+    course = None
+    for course in courses:
+        if course["code"] == str(course_code):
+            course = course
+            break;
+    if student is None:
+        print("Sinh viên không tồn tại")
+        return False
+    else:
+        if course is Node:
+            print("Học phần không tồn tại")
+            return False
+        else:
+            if course["enrolled"] >= course["capacity"]:
+                print("Đăng ký thất bại do đã đủ số lượng.")
+                return False
+            else:
+                enrollment = {"student_id": student["id"],"course_code": course["code"]}
+                if enrollment in enrollments:
+                    print("Sinh viên đã đăng ký học phần này rồi.")
+                else:
+                    enrollments.append(enrollment)
+                    course["enrolled"] += 1
+                    print("Đăng ký thành công.")
+
+        
+    
