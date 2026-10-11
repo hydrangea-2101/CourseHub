@@ -1,3 +1,4 @@
+from calendar import c
 from pydantic import BaseModel, Field
 class EnrollmentCreate(BaseModel):
     student_id: str = Field(
@@ -10,3 +11,6 @@ class EnrollmentCreate(BaseModel):
         max_length=20,
         examples=["WEB-01"],
     )
+
+class SectionCapacityUpdate(BaseModel):
+    capacity: int = Field(..., gt=0, description="Sức chứa mới phải lớn hơn 0")

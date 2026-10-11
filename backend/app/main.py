@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException, Query, Response, status
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from .database import engine
-from .schemas import EnrollmentCreate
+from .schemas import EnrollmentCreate,SectionCapacityUpdate
 logger = logging.getLogger(__name__)
 app = FastAPI(
     title="CourseHub API",
@@ -32,13 +32,16 @@ def health_check() -> dict[str, str]:
 @app.get("/courses")
 def list_courses(
     q: str | None = Query(default=None, min_length=1),
+    skip: int = Query(default=0, ge=0, description="Số lượng bản ghi bỏ qua, không được âm"),
+    limit: int = Query(default=10, ge=1, le=100, description="Giới hạn số bản ghi trả về (1 - 100)"),
 ) -> list[dict[str, object]]:
 
     sql = """
         SELECT code, name, credits
         FROM courses
         """
-    parameters: dict[str, object] = {}
+    parameters: dict[str, object] = {"skip": skip, "limit": limit}
+    
     if q is not None:
         keyword = q.strip().lower()
         if not keyword:
@@ -51,29 +54,17 @@ def list_courses(
             OR LOWER(name) LIKE :keyword
             """
         parameters["keyword"] = f"%{keyword}%"
-    sql += " ORDER BY code"
+        
+    # Áp dụng ORDER BY ổn định trước OFFSET/LIMIT
+    sql += """
+        ORDER BY code
+        OFFSET :skip LIMIT :limit;
+    """
+    
     with engine.connect() as connection:
         rows = connection.execute(text(sql), parameters).mappings().all()
+        
     return [dict(row) for row in rows]
-
-@app.get("/courses/{course_code}")
-def get_course(course_code: str) -> dict[str, object]:
-    sql = """
-        SELECT code, name, credits
-        FROM courses
-        WHERE code = :course_code
-        """
-    with engine.connect() as connection:
-        row = connection.execute(
-            text(sql),
-            {"course_code": course_code.upper()},
-        ).mappings().first()
-    if row is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Khong tim thay hoc phan",
-        )
-    return dict(row)
 
 @app.get("/sections")
 def list_sections(
@@ -212,3 +203,99 @@ def delete_enrollment(student_id: str, class_section_id: str) -> Response:
             detail="Khong tim thay dang ky can huy",
         )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@app.get("/lecturers")
+def get_lecturers() -> list[dict[str, object]]:
+    sql = """
+        SELECT id, name
+        FROM lecturers
+        ORDER BY id;
+    """
+    with engine.connect() as connection:
+        result = connection.execute(text(sql)).mappings().all()
+    
+    # Chuyển đổi danh sách các row thành danh sách các dictionary
+    return [dict(row) for row in result]
+
+@app.get("/sections/{section_id}")
+def get_section_detail(section_id: str) -> dict[str, object]:
+    sql = """
+        SELECT 
+            cs.id AS section_id,
+            c.code AS course_code,
+            c.name AS course_name,
+            cs.semester_code,
+            l.name AS lecturer_name,
+            v.capacity,
+            v.enrolled,
+            v.remaining
+        FROM class_sections cs
+        JOIN courses c ON cs.course_code = c.code
+        LEFT JOIN lecturers l ON cs.lecturer_id = l.id
+        LEFT JOIN v_section_summary v ON cs.id = v.class_id
+        WHERE cs.id = :section_id;
+    """
+    
+    with engine.connect() as connection:
+        row = connection.execute(
+            text(sql),
+            {"section_id": section_id.strip()}
+        ).mappings().first()
+        
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Khong tim thay lop hoc phan"
+        )
+        
+    return dict(row)
+
+@app.patch("/sections/{section_id}/capacity")
+def update_section_capacity(section_id: str, payload: SectionCapacityUpdate) -> dict[str, object]:
+    with engine.connect() as connection:
+        # Bước 1: Kiểm tra xem lớp học phần có tồn tại không và lấy thông tin capacity hiện tại, số lượng đã đăng ký (enrolled)
+        check_sql = """
+            SELECT 
+                cs.id AS section_id,
+                v.enrolled
+            FROM class_sections cs
+            LEFT JOIN v_section_summary v ON cs.id = v.class_id
+            WHERE cs.id = :section_id;
+        """
+        row = connection.execute(
+            text(check_sql),
+            {"section_id": section_id.strip()}
+        ).mappings().first()
+
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Khong tim thay lop hoc phan"
+            )
+
+        current_enrolled = row["enrolled"] or 0
+
+        # Bước 2: Kiểm tra nếu capacity mới nhỏ hơn số lượng đã đăng ký -> Trả về lỗi 409 Conflict
+        if payload.capacity < current_enrolled:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Sức chứa mới ({payload.capacity}) không được nhỏ hơn số sinh viên đã đăng ký ({current_enrolled})"
+            )
+
+        # Bước 3: Thực hiện câu lệnh cập nhật capacity trong bảng class_sections
+        update_sql = """
+            UPDATE class_sections
+            SET capacity = :new_capacity
+            WHERE id = :section_id;
+        """
+        connection.execute(
+            text(update_sql),
+            {"new_capacity": payload.capacity, "section_id": section_id.strip()}
+        )
+        connection.commit()
+
+    return {
+        "message": "Cập nhật sức chứa thành công",
+        "section_id": section_id.strip(),
+        "new_capacity": payload.capacity
+    }
